@@ -10,6 +10,8 @@
 
 import os
 import pprint
+import re
+import subprocess
 
 import sgtk
 from sgtk.util.filesystem import ensure_folder_exists
@@ -140,7 +142,7 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
         List of item types that this plugin is interested in.
 
         Only items matching entries in this list will be presented to the
-        accept() method. Strings can contain glob patters such as *, for 
+        accept() method. Strings can contain glob patters such as *, for
         example ["substancepainter.*", "file.substancepainter"]
         """
         return ["substancepainter.texture"]
@@ -148,7 +150,7 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
     def accept(self, settings, item):
         """
         Method called by the publisher to determine if an item is of any
-        interest to this plugin. Only items matching the filters defined via 
+        interest to this plugin. Only items matching the filters defined via
         the item_filters property will be presented to this method.
 
         A publish task will be generated for each item accepted here. Returns a
@@ -188,7 +190,7 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
         boolean to indicate validity.
 
         :param settings: Dictionary of Settings. The keys are strings, matching
-                         the keys returned in the settings property. The values 
+                         the keys returned in the settings property. The values
                          are `Setting` instances.
         :param item: Item to process
         :returns: True if item is valid, False otherwise.
@@ -209,6 +211,7 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
             raise Exception(error_msg)
 
         path = item.properties["path"]
+        self
         if not os.path.isfile(path):
             error_msg = (
                 "Validation failed. Texture path does not exist on disk. %s" % path
@@ -253,6 +256,11 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
         fields["extension"] = extension[1:]  # no dot
         publish_path = publish_template.apply_fields(fields)
         publish_path = sgtk.util.ShotgunPath.normalize(publish_path)
+
+        drive = "Z:"
+        engine = sgtk.platform.current_engine()
+
+        publish_path = map_network_drive(publish_path, drive)
 
         publish_dir, filenamefile = os.path.split(publish_path)
 
@@ -331,13 +339,13 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
         """
         Given a context, publish name and type, find all publishes from Shotgun
         that match.
-        
+
         :param ctx:             Context to use when looking for publishes
         :param publish_name:    The name of the publishes to look for
         :param publish_type:    The type of publishes to look for
-        
+
         :returns:               A list of Shotgun publish records that match the search
-                                criteria        
+                                criteria
         """
         publish_entity_type = sgtk.util.get_published_file_entity_type(self.parent.sgtk)
         if publish_entity_type == "PublishedFile":
@@ -365,7 +373,7 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
             sg_publishes = self.parent.shotgun.find(
                 publish_entity_type, filters, query_fields
             )
-        except Exception, e:
+        except Exception as e:
             self.logger.error(
                 "Failed to find publishes of type '%s', called '%s', for context %s: %s"
                 % (publish_name, publish_type, ctx, e)
@@ -383,7 +391,43 @@ def _export_path():
     # get the path to the current file
     path = engine.app.get_project_export_path()
 
-    if isinstance(path, unicode):
+    if not isinstance(path, str):
         path = path.encode("utf-8")
 
     return path
+
+
+def map_network_drive(server_path, drive_letter):
+    engine = sgtk.platform.current_engine()
+
+    # get year server 2 3 or 3 from path
+
+    match = re.match(r"(\\\\.*?\\)([^\\]+)\\", server_path)
+
+    if match:
+        network_location = match.group(1)
+        year_folder = match.group(2)
+        combined_path = network_location + year_folder
+
+    engine.log_debug(f"server path: {combined_path}")
+
+    # disconect drive
+    command = f"net use {drive_letter} /delete"
+    try:
+        subprocess.run(command, shell=True, check=True, text=True)
+        engine.log_debug(f"Successfully disconected {drive_letter}")
+    except:
+        engine.log_debug(f"Failed to discnect {drive_letter}")
+
+    # map drive
+    command = f"net use {drive_letter} {combined_path}"
+    try:
+        subprocess.run(command, shell=True, check=True, text=True)
+        engine.log_debug(f"Successfully mapped {combined_path} to {drive_letter}")
+    except subprocess.CalledProcessError as e:
+        engine.log_debug(f"Failed to map drive: {e}")
+
+    new_path = str(drive_letter) + server_path.replace(combined_path, "")
+    engine.log_debug(f"Drive export path: {new_path}")
+
+    return new_path

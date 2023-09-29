@@ -10,6 +10,8 @@
 
 import os
 import pprint
+import re
+import subprocess
 
 import sgtk
 from sgtk.util.filesystem import ensure_folder_exists
@@ -210,10 +212,18 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
             raise Exception(error_msg)
 
         export_path = _export_path()
+
+        
+
         if not os.path.isdir(export_path):
             error_msg = "Validation failed. Export path does not exist on disk."
             self.logger.error(error_msg)
             raise Exception(error_msg)
+        
+        #Update path to use the mapped drive
+        engine = sgtk.platform.current_engine()
+        export_path = os.path.join(engine.map_newtork_drive(export_path))
+        self.logger.debug(f"base loaction: {export_path}")
 
         item.properties["export_path"] = export_path
 
@@ -377,7 +387,7 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
             sg_publishes = self.parent.shotgun.find(
                 publish_entity_type, filters, query_fields
             )
-        except Exception, e:
+        except Exception as e:
             self.logger.error(
                 "Failed to find publishes of type '%s', called '%s', for context %s: %s"
                 % (publish_name, publish_type, ctx, e)
@@ -395,7 +405,7 @@ def _export_path():
     # get the path to the current file
     path = engine.app.get_project_export_path()
 
-    if isinstance(path, unicode):
+    if not isinstance(path, str):
         path = path.encode("utf-8")
 
     return path
