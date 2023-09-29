@@ -9,6 +9,8 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import os
+import subprocess
+import re
 
 import sgtk
 
@@ -25,7 +27,7 @@ SESSION_PUBLISHED_TYPE = "Substance Painter Project File"
 
 class SubstancePainterSessionCollector(HookBaseClass):
     """
-    Collector that operates on the substance painter session. Should inherit 
+    Collector that operates on the substance painter session. Should inherit
     from the basic collector hook.
     """
 
@@ -74,7 +76,7 @@ class SubstancePainterSessionCollector(HookBaseClass):
             },
             "Publish Textures as Folder": {
                 "type": "bool",
-                "default": True,
+                "default": False,
                 "description": "Publish Substance Painter textures as a folder."
                 "If true (default) textures will be all exported"
                 " together as a folder publish."
@@ -90,7 +92,7 @@ class SubstancePainterSessionCollector(HookBaseClass):
 
     def process_current_session(self, settings, parent_item):
         """
-        Analyzes the current session open in Substance Painter and parents a 
+        Analyzes the current session open in Substance Painter and parents a
         subtree of items under the parent_item passed in.
 
         :param dict settings: Configured settings for this collector
@@ -102,11 +104,8 @@ class SubstancePainterSessionCollector(HookBaseClass):
         item = self.collect_current_substancepainter_session(settings, parent_item)
 
         if item:
-            publish_as_folder_setting = settings.get("Publish Textures as Folder")
-            if publish_as_folder_setting and publish_as_folder_setting.value:
-                resource_items = self.collect_textures_as_folder(settings, item)
-            else:
-                resource_items = self.collect_textures(settings, item)
+            # HARDCODE to publish textures as individual published files
+            resource_items = self.collect_textures(settings, item)
 
     def get_export_path(self, settings):
         publisher = self.parent
@@ -154,9 +153,16 @@ class SubstancePainterSessionCollector(HookBaseClass):
         if not export_path:
             export_path = engine.app.get_project_export_path()
 
+        # update path to use the mapped drive
+        drive_letter = "Z:"
+        export_path = self.map_newtork_drive(export_path, drive_letter)
+
+        engine.log_debug(f"Export path: {export_path}")
+
         engine.show_busy(
             "Exporting textures",
-            "Texture are being exported so they can " "be published.\n\nPlease wait...",
+            "Texture are being exported a folder so they can "
+            "be published.\n\nPlease wait...",
         )
 
         map_export_info = engine.app.export_document_maps(export_path)
@@ -182,15 +188,56 @@ class SubstancePainterSessionCollector(HookBaseClass):
                 textures_item.properties["path"] = export_path
                 textures_item.properties["publish_type"] = "Texture Folder"
 
+    def map_newtork_drive(self, server_path, drive_letter):
+        engine = sgtk.platform.current_engine()
+
+        # get year server 2 3 or 3 from path
+
+        match = re.match(r"(\\\\.*?\\)([^\\]+)\\", server_path)
+
+        if match:
+            network_location = match.group(1)
+            year_folder = match.group(2)
+            combined_path = network_location + year_folder
+
+        engine.log_debug(f"server path: {combined_path}")
+
+        # disconect drive
+        command = f"net use {drive_letter} /delete"
+        try:
+            subprocess.run(command, shell=True, check=True, text=True)
+            engine.log_debug(f"Successfully disconected {drive_letter}")
+        except:
+            engine.log_debug(f"Failed to discnect {drive_letter}")
+
+        # map drive
+        command = f"net use {drive_letter} {combined_path}"
+        try:
+            subprocess.run(command, shell=True, check=True, text=True)
+            engine.log_debug(f"Successfully mapped {combined_path} to {drive_letter}")
+        except subprocess.CalledProcessError as e:
+            engine.log_debug(f"Failed to map drive: {e}")
+
+        new_path = str(drive_letter) + server_path.replace(combined_path, "")
+        engine.log_debug(f"Drive export path: {new_path}")
+
+        return new_path
+
     def collect_textures(self, settings, parent_item):
         publisher = self.parent
         engine = sgtk.platform.current_engine()
 
-        self.logger.debug("Exporting textures...")
+        engine.log_debug("Exporting textures...")
 
         export_path = self.get_export_path(settings)
         if not export_path:
             export_path = engine.app.get_project_export_path()
+
+        # update path to use the mapped drive
+        drive_letter = "Z:"
+        export_path = self.map_newtork_drive(export_path, drive_letter)
+
+        engine.log_debug(f"Export path: {export_path}")
 
         engine.show_busy(
             "Exporting textures",
@@ -200,12 +247,12 @@ class SubstancePainterSessionCollector(HookBaseClass):
         map_export_info = engine.app.export_document_maps(export_path)
         engine.clear_busy()
 
-        self.logger.debug("Collecting exported textures...")
+        engine.log_debug("Collecting exported textures...")
 
         icon_path = os.path.join(self.disk_location, os.pardir, "icons", "texture.png")
 
-        for texture_set_name, texture_set in map_export_info.iteritems():
-            for texture_id, texture_file in texture_set.iteritems():
+        for texture_set_name, texture_set in map_export_info.items():
+            for texture_id, texture_file in texture_set.items():
                 if os.path.exists(texture_file):
                     _, filenamefile = os.path.split(texture_file)
                     texture_name, _ = os.path.splitext(filenamefile)
@@ -217,6 +264,7 @@ class SubstancePainterSessionCollector(HookBaseClass):
                     textures_item.set_icon_from_path(icon_path)
 
                     textures_item.properties["path"] = texture_file
+                    textures_item.set_thumbnail_from_path(texture_file)
                     textures_item.properties["publish_type"] = "Texture"
 
     def collect_current_substancepainter_session(self, settings, parent_item):
@@ -243,7 +291,9 @@ class SubstancePainterSessionCollector(HookBaseClass):
 
         # create the session item for the publish hierarchy
         session_item = parent_item.create_item(
-            "substancepainter.session", "Substance Painter Session", display_name,
+            "substancepainter.session",
+            "Substance Painter Session",
+            display_name,
         )
 
         # get the icon path to display for this item
@@ -254,7 +304,6 @@ class SubstancePainterSessionCollector(HookBaseClass):
         # that it can be used by attached publish plugins
         work_template_setting = settings.get("Work Template")
         if work_template_setting:
-
             work_template = publisher.engine.get_template_by_name(
                 work_template_setting.value
             )
