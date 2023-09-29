@@ -13,7 +13,8 @@ Menu handling for Substnace Painter
 
 """
 
-import tank
+# import tank
+# import sgtk
 import sys
 import os
 import unicodedata
@@ -21,10 +22,11 @@ import unicodedata
 
 __author__ = "Diego Garcia Huerta"
 __email__ = "diegogh2000@gmail.com"
-
-
-from tank.platform.qt5 import QtWidgets, QtGui, QtCore, QtWebSockets, QtNetwork
-
+# from tank.platform.qt import QtWidgets, QtGui, QtCore, QtWebSockets, QtNetwork
+# from sgtk.platform.qt5 import QtWidgets, QtGui, QtCore, QtWebSockets, QtNetwork
+from PySide2 import QtGui
+from PySide2 import QtWidgets
+from PySide2 import QtCore
 
 class MenuGenerator(object):
     """
@@ -286,7 +288,7 @@ class AppCommand(object):
             app = self.properties["app"]
             doc_url = app.documentation_url
             # deal with nuke's inability to handle unicode. #fail
-            if doc_url.__class__ == unicode:
+            if not isinstance(doc_url, str):
                 doc_url = unicodedata.normalize("NFKD", doc_url).encode(
                     "ascii", "ignore"
                 )
