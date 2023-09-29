@@ -15,7 +15,8 @@ import signal
 
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-from tank.platform.qt5 import QtGui, QtCore, QtWebSockets, QtNetwork
+from PySide2 import QtGui, QtCore, QtWebSockets, QtNetwork
+# from tank.platform.qt5 import QtGui, QtCore, QtWebSockets, QtNetwork
 
 QCoreApplication = QtCore.QCoreApplication
 QUrl = QtCore.QUrl
@@ -134,13 +135,13 @@ class Client(QtCore.QObject):
         message_id = jsonData.get("id")
 
         # requesting data
-        if jsonData.has_key("method"):
+        if "method" in jsonData:
             # self.log_debug("client: request detected: %s" % (message))
             method = jsonData.get("method")
             params = jsonData.get("params")
             self.engine.process_request(method, **params)
 
-        if jsonData.has_key("result"):
+        if "result" in jsonData:
             # self.log_debug("client: result detected: %s" % (message))
             if message_id in self.callbacks:
                 # self.log_debug(
@@ -210,6 +211,42 @@ class EngineClient(Client):
         path = self.send_and_receive("GET_CURRENT_PROJECT_PATH")
         self.log_debug("CURRENT_PROJECT_PATH: %s (%s)" % (path, type(path)))
         return path
+    
+    def map_network_drive(server_path):
+
+
+        engine = sgtk.platform.current_engine()
+
+        # get year server 2 3 or 3 from path
+
+        drive_letter = "Z:"
+
+        match = re.match(r'(\\\\.*?\\)([^\\]+)\\', server_path)
+
+        if match:
+            network_location = match.group(1)
+            year_folder = match.group(2)
+            combined_path = network_location + year_folder
+
+        
+        # disconect drive
+        command = f"net use {drive_letter} /delete"
+        try:
+            subprocess.run(command, shell=True, check=True, text=True)
+        except subprocess.CalledProcessError as e:
+            return
+
+        # map drive
+        command = f"net use {drive_letter} {combined_path}"
+        try:
+            subprocess.run(command, shell=True, check=True, text=True)
+
+        except subprocess.CalledProcessError as e:
+            return
+        
+        new_path = str(drive_letter) + server_path.replace(combined_path, '')
+
+        return new_path
 
     def need_saving(self):
         result = self.send_and_receive("NEEDS_SAVING", path=path)
@@ -270,11 +307,46 @@ class EngineClient(Client):
         result = self.send_and_receive("GET_MAP_EXPORT_INFORMATION")
         return result
 
-    def export_document_maps(self, destination):
-        # This is a trick to wait until the async process of
-        # exporting textures finishes.
-        self.__export_results = None
+    # def export_document_maps(self, preset, destination, format, mapInfo):
+    #     # This is a trick to wait until the async process of
+    #     # exporting textures finishes.
+    #     self.__export_results = None
 
+    #     def run_once_finished_exporting_maps(**kwargs):
+    #         self.__export_results = kwargs.get("map_infos", {})
+
+    #     self.engine.register_event_callback(
+    #         "EXPORT_FINISHED", run_once_finished_exporting_maps
+    #     )
+
+    #     self.log_debug("Starting map export...")
+    #     self.send_and_receive("EXPORT_DOCUMENT_MAPS",
+    #                           preset=preset,
+    #                           destination=destination,
+    #                           format=format,
+    #                           mapInfo=mapInfo)
+
+    #     while self.__export_results is None:
+    #         self.log_debug("Waiting for maps to be exported ...")
+    #         QCoreApplication.processEvents()
+    #         time.sleep(self.wait_period)
+
+    #     self.engine.unregister_event_callback(
+    #         "EXPORT_FINISHED", run_once_finished_exporting_maps
+    #     )
+
+    #     result = self.__export_results
+
+    #     # no need for this variable anymore
+    #     del self.__export_results
+
+    #     self.log_debug("Map export ended.")
+    #     return result
+    def export_document_maps(self, destination):
+        #this is a trick to wait until the async process of
+        # exporting textures finsihes.
+        self.__export_results = None
+        
         def run_once_finished_exporting_maps(**kwargs):
             self.__export_results = kwargs.get("map_infos", {})
 
@@ -301,11 +373,13 @@ class EngineClient(Client):
 
         self.log_debug("Map export ended.")
         return result
+        
 
     def update_document_resources(self, old_url, new_url):
         result = self.send_and_receive(
             "UPDATE_DOCUMENT_RESOURCES", old_url=old_url, new_url=new_url
         )
+        
         return result
 
     def document_resources(self):
