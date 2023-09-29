@@ -10,7 +10,8 @@
 
 import os
 import sgtk
-from sgtk.platform.qt import QtGui
+# from sgtk.platform.qt import QtGui
+from PySide2 import QtGui
 
 HookClass = sgtk.get_hook_baseclass()
 
