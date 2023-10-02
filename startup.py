@@ -212,18 +212,6 @@ class SubstancePainterLauncher(SoftwareLauncher):
     # globbing and regex matches by replacing the named format placeholders
     # with an appropriate glob or regex string.
 
-    EXECUTABLE_TEMPLATES = {
-        "darwin": ["/Applications/Allegorithmic/Substance Painter.app"],
-        "win32": [
-            "C:/Program Files/Adobe/Adobe Substance 3D Painter/Adobe Substance 3D Painter.exe"
-        ],
-        "linux2": [
-            "/usr/Allegorithmic/Substance Painter",
-            "/usr/Allegorithmic/Substance_Painter/Substance Painter",
-            "/opt/Allegorithmic/Substance_Painter/Substance Painter",
-        ],
-    }
-
     @property
     def minimum_supported_version(self):
         """
@@ -433,32 +421,39 @@ class SubstancePainterLauncher(SoftwareLauncher):
         """
 
         # all the executable templates for the current OS
-        executable_templates = self.EXECUTABLE_TEMPLATES.get(sys.platform, [])
+        if sgtk.util.is_linux():
+            executable_template = "{}".format(self.get_setting("substance_painter_path_linux"))
+        elif sgtk.util.is_macos():
+            executable_template = "{}".format(self.get_setting("substance_painter_path_mac"))
+        elif sgtk.util.is_windows():
+            executable_template = "{}".format(self.get_setting("substance_painter_path_windows"))
+
+        self.logger.debug("AAAAAAAAAAAAAA")
+        self.logger.debug(executable_template)
 
         # all the discovered executables
         sw_versions = []
 
-        for executable_template in executable_templates:
-            self.logger.debug("Processing template %s.", executable_template)
+        self.logger.debug("Processing template %s.", executable_template)
 
-            executable_matches = self._glob_and_match(
-                executable_template, self.COMPONENT_REGEX_LOOKUP
+        executable_matches = self._glob_and_match(
+            executable_template, self.COMPONENT_REGEX_LOOKUP
+        )
+
+        # Extract all products from that executable.
+        for executable_path, key_dict in executable_matches:
+            executable_version = key_dict.get("version", UNKNOWN_VERSION)
+
+            self.logger.debug(
+                "Software found: %s | %s.", executable_version, executable_template
             )
-
-            # Extract all products from that executable.
-            for executable_path, key_dict in executable_matches:
-                executable_version = key_dict.get("version", UNKNOWN_VERSION)
-
-                self.logger.debug(
-                    "Software found: %s | %s.", executable_version, executable_template
+            sw_versions.append(
+                SoftwareVersion(
+                    executable_version,
+                    "Substance Painter",
+                    executable_path,
+                    self._icon_from_engine(),
                 )
-                sw_versions.append(
-                    SoftwareVersion(
-                        executable_version,
-                        "Substance Painter",
-                        executable_path,
-                        self._icon_from_engine(),
-                    )
-                )
+            )
 
             return sw_versions

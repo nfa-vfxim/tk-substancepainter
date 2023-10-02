@@ -96,6 +96,18 @@ configuration:
         default_value: []
         values:
             type: str
+    
+    # --- PATHS ---
+
+    substance_painter_path_linux:
+        type: str
+        description: Linux path to your Substance Painter installation for creating slates.
+    substance_painter_path_mac:
+        type: str
+        description: Mac path to your Substance Painter installation for creating slates.
+    substance_painter_path_windows:
+        type: str
+        description: Windows path to your Substance Painter installation for creating slates.
 
 # the Shotgun fields that this engine needs in order to operate correctly
 requires_shotgun_fields:
