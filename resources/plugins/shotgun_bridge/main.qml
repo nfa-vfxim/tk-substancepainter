@@ -456,6 +456,7 @@ PainterPlugin
 
   function getMapExportInformation(data)
   {
+    
     var export_preset = alg.mapexport.getProjectExportPreset();
     var export_options = alg.mapexport.getProjectExportOptions();
     var export_path = alg.mapexport.exportPath();
@@ -464,10 +465,10 @@ PainterPlugin
 
   function exportDocumentMaps(data)
   {
-    var export_preset = alg.mapexport.getProjectExportPreset();
+    server.sendCommand("EXPORT_STARTED", {});
+    var export_preset = alg.mapexport.getProjectExportPreset()
     var export_options = alg.mapexport.getProjectExportOptions();
     var export_path = data.destination;
-    server.sendCommand("EXPORT_STARTED", {});
     var result = alg.mapexport.exportDocumentMaps(export_preset, export_path, export_options.fileFormat)
     server.sendCommand("EXPORT_FINISHED", {map_infos:result});
     return true;

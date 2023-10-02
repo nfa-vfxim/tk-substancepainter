@@ -461,4 +461,4 @@ class SubstancePainterLauncher(SoftwareLauncher):
                     )
                 )
 
-        return sw_versions
+            return sw_versions
