@@ -257,10 +257,10 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
         publish_path = publish_template.apply_fields(fields)
         publish_path = sgtk.util.ShotgunPath.normalize(publish_path)
 
-        drive = "Z:"
-        engine = sgtk.platform.current_engine()
+        # drive = "Z:"
+        # engine = sgtk.platform.current_engine()
 
-        publish_path = map_network_drive(publish_path, drive)
+        #publish_path = map_network_drive(publish_path, drive)
 
         publish_dir, filenamefile = os.path.split(publish_path)
 
