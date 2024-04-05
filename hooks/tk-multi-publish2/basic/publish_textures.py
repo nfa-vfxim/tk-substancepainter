@@ -10,8 +10,6 @@
 
 import os
 import pprint
-import re
-import subprocess
 
 import sgtk
 from sgtk.util.filesystem import ensure_folder_exists
@@ -125,10 +123,17 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
             "Publish Template": {
                 "type": "template",
                 "default": None,
-                "description": "Template path for published texture files. Should"
-                "correspond to a template defined in "
+                "description": "Template path for published texture folder. "
+                "Should correspond to a template defined in "
                 "templates.yml.",
-            }
+            },
+            "Publish Name Template": {
+                "type": "template",
+                "default": None,
+                "description": "Template path for published texture folder name. "
+                "Should correspond to a template defined in "
+                "templates.yml.",
+            },
         }
 
         # update the base settings
@@ -145,7 +150,7 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
         accept() method. Strings can contain glob patters such as *, for
         example ["substancepainter.*", "file.substancepainter"]
         """
-        return ["substancepainter.texture"]
+        return ["substancepainter.textures"]
 
     def accept(self, settings, item):
         """
@@ -180,7 +185,8 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
             item.context_change_allowed = False
 
         self.logger.info(
-            "Substance Painter '%s' plugin accepted to publish textures." % (self.name,)
+            "Substance Painter '%s' plugin accepted the publish textures."
+            % (self.name,)
         )
         return {"accepted": True, "checked": True}
 
@@ -203,6 +209,7 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
         publish_template = publisher.engine.get_template_by_name(
             publish_template_setting.value
         )
+
         if publish_template:
             item.properties["publish_template"] = publish_template
         else:
@@ -211,13 +218,25 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
             raise Exception(error_msg)
 
         path = item.properties["path"]
-
-        if not os.path.isfile(path):
+        if not os.path.isdir(path):
             error_msg = (
-                "Validation failed. Texture path does not exist on disk. %s" % path
+                "Validation failed. Texture folder path does not exist on disk. %s"
+                % path
             )
             self.logger.error(error_msg)
             raise Exception(error_msg)
+
+        textures = os.listdir(path)
+        textures = [os.path.join(path, texture) for texture in textures]
+        textures = [texture for texture in textures if os.path.isfile(texture)]
+        self.logger.debug("Files in export path: %s" % textures)
+
+        if not textures:
+            error_msg = "Validation failed. Export path does not contain any texture."
+            self.logger.error(error_msg)
+            raise Exception(error_msg)
+
+        item.properties["textures"] = textures
 
         return True
 
@@ -235,9 +254,6 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
 
         publish_template = item.properties["publish_template"]
         publish_type = item.properties["publish_type"]
-        src = item.properties["path"]
-        _, filename = os.path.split(src)
-        filenamefile, extension = os.path.splitext(filename)
 
         # Get fields from the current context
         fields = {}
@@ -245,24 +261,25 @@ class SubstancePainterTexturesPublishPlugin(HookBaseClass):
         fields.update(ctx_fields)
 
         context_entity_type = self.parent.context.entity["type"]
-        publish_name = context_entity_type + "_" + filenamefile
+        publish_name = context_entity_type + "_textures"
 
         existing_publishes = self._find_publishes(
             self.parent.context, publish_name, publish_type
         )
         version = max([p["version_number"] for p in existing_publishes] or [0]) + 1
         fields["version"] = version
-        fields["channel"] = filenamefile
-        fields["extension"] = extension[1:]  # no dot
+
         publish_path = publish_template.apply_fields(fields)
         publish_path = sgtk.util.ShotgunPath.normalize(publish_path)
 
-        publish_dir, filenamefile = os.path.split(publish_path)
+        ensure_folder_exists(publish_path)
 
-        # make sure destination folder exists
-        ensure_folder_exists(publish_dir)
+        textures = item.properties["textures"]
 
-        sgtk.util.filesystem.copy_file(src, publish_path)
+        for src in textures:
+            _, filenamefile = os.path.split(src)
+            dst = os.path.join(publish_path, filenamefile)
+            sgtk.util.filesystem.copy_file(src, dst)
 
         self.logger.info("A Publish will be created in Shotgun and linked to:")
         self.logger.info("  %s" % (publish_path,))
