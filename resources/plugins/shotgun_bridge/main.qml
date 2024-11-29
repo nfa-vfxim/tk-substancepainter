@@ -469,7 +469,15 @@ PainterPlugin
     var export_preset = alg.mapexport.getProjectExportPreset()
     var export_options = alg.mapexport.getProjectExportOptions();
     var export_path = data.destination;
-    var result = alg.mapexport.exportDocumentMaps(export_preset, export_path, export_options.fileFormat)
+
+    if (alg.settings.value("highResExports") == "yeah")
+    {
+      log_debug("Exporting 8k textures!");
+      var result = alg.mapexport.exportDocumentMaps(export_preset, export_path, export_options.fileFormat, {resolution:[8192,8192]});
+    } else{
+      var result = alg.mapexport.exportDocumentMaps(export_preset, export_path, export_options.fileFormat);
+    }
+
     server.sendCommand("EXPORT_FINISHED", {map_infos:result});
     return true;
   }
@@ -550,6 +558,31 @@ PainterPlugin
     onRejected:
     {
       return false;
+    }
+  }
+
+  Dialog
+  {
+    visible: true
+    id: exportHighResTextureDialog
+    title: "8k????"
+    standardButtons: StandardButton.Yes | StandardButton.No
+
+    Text {
+        text: "Heya buddy, are ya publishing 8K textures today?"
+        color: "navy"
+    }
+  
+    // I hate everything about this janky fix D:<
+    onYes:
+    {
+      log_debug("8K textures confirmed!");
+      alg.settings.setValue("highResExports", "yeah");
+    }
+    onNo:
+    {
+      log_debug("No 8k textures for you!");
+      alg.settings.setValue("highResExports", "nah");
     }
   }
 }
